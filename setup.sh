@@ -8,7 +8,7 @@ C='\033[0;36m'; G='\033[0;32m'; Y='\033[1;33m'; R='\033[0;31m'; W='\033[0m'; B='
 
 echo -e "${C}${B}"
 echo "╔══════════════════════════════════════════════════════════╗"
-echo "║      BrainHack Robot — Fresh RPi 4B 2GB Setup          ║"
+echo "║      BrainHack Robot — RPi 4B 2GB Setup                ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo -e "${W}"
 
@@ -21,8 +21,7 @@ sudo apt install -y \
     ffmpeg unzip wget curl \
     libsndfile1 libasound2-dev \
     python3-opencv \
-    python3-rpi.gpio \
-    libatlas-base-dev
+    python3-rpi.gpio
 echo -e "${G}✓ Done${W}"
 
 # ── Step 2: Python packages ───────────────────────────────
@@ -52,9 +51,9 @@ else
     echo -e "${G}✓ Already exists${W}"
 fi
 
-# ── Step 4: ALSA config ───────────────────────────────────
+# ── Step 4: ALSA audio config ─────────────────────────────
 echo -e "${C}[4/7] Configuring audio (mic=hw:3,0 speaker=hw:0,0)...${W}"
-sudo bash -c 'cat > /etc/asound.conf << EOF
+sudo tee /etc/asound.conf > /dev/null << 'ASOUND'
 pcm.!default {
     type asym
     playback.pcm {
@@ -70,8 +69,7 @@ ctl.!default {
     type hw
     card 0
 }
-EOF'
-# Max volume
+ASOUND
 amixer -c 0 set Headphone 100% unmute 2>/dev/null || true
 amixer -c 0 set PCM 100% unmute 2>/dev/null || true
 sudo alsactl store 2>/dev/null || true
@@ -83,19 +81,22 @@ sudo dphys-swapfile swapoff 2>/dev/null || true
 sudo sed -i 's/CONF_SWAPSIZE=.*/CONF_SWAPSIZE=2048/' /etc/dphys-swapfile
 sudo dphys-swapfile setup
 sudo dphys-swapfile swapon
-echo -e "${G}✓ Swap ready$(free -h | grep Swap)${W}"
+echo -e "${G}✓ Swap ready${W}"
+free -h | grep Swap
 
 # ── Step 6: Ollama + model ────────────────────────────────
-echo -e "${C}[6/7] Installing Ollama...${W}"
+echo -e "${C}[6/7] Installing Ollama + qwen2.5:1.5b...${W}"
 if ! command -v ollama &>/dev/null; then
     curl -fsSL https://ollama.ai/install.sh | sh
+else
+    echo -e "${G}✓ Ollama already installed${W}"
 fi
 
-echo -e "${Y}Starting Ollama and pulling qwen2.5:1.5b (~900MB)...${W}"
+echo -e "${Y}Starting Ollama and pulling model (~900MB)...${W}"
 ollama serve &>/dev/null &
-sleep 6
+sleep 8
 ollama pull qwen2.5:1.5b
-echo -e "${G}✓ Ollama + model ready${W}"
+echo -e "${G}✓ Ollama + qwen2.5:1.5b ready${W}"
 
 # ── Step 7: Performance optimizations ────────────────────
 echo -e "${C}[7/7] Optimizing RPi performance...${W}"
@@ -104,14 +105,14 @@ echo -e "${C}[7/7] Optimizing RPi performance...${W}"
 sudo systemctl disable bluetooth hciuart triggerhappy avahi-daemon 2>/dev/null || true
 sudo systemctl stop bluetooth hciuart triggerhappy avahi-daemon 2>/dev/null || true
 
-# GPU memory split — give more to CPU
+# Give more RAM to CPU
 if ! grep -q "gpu_mem=64" /boot/firmware/config.txt 2>/dev/null; then
     echo "gpu_mem=64" | sudo tee -a /boot/firmware/config.txt
 fi
 
-# Auto-start service
+# Auto-start on boot
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-sudo bash -c "cat > /etc/systemd/system/brainhack.service << EOF
+sudo tee /etc/systemd/system/brainhack.service > /dev/null << SERVICE
 [Unit]
 Description=BrainHack Robot
 After=network.target sound.target
@@ -126,7 +127,7 @@ RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
-EOF"
+SERVICE
 
 sudo systemctl daemon-reload
 sudo systemctl enable brainhack
@@ -139,22 +140,20 @@ echo "╔═══════════════════════�
 echo "║                 Setup Complete! ✓                       ║"
 echo "╠══════════════════════════════════════════════════════════╣"
 echo "║                                                          ║"
-echo "║  NEXT STEPS:                                             ║"
-echo "║                                                          ║"
 echo "║  1. Fill in hackathon details:                           ║"
 echo "║     nano brainhack.py                                    ║"
-echo "║     → Edit HACKATHON_INFO section                        ║"
+echo "║     Edit the HACKATHON_INFO section                      ║"
 echo "║                                                          ║"
-echo "║  2. Check your hardware pins:                            ║"
-echo "║     PIR sensor → GPIO 17                                 ║"
-echo "║     Camera → CSI port or USB                            ║"
-echo "║     Mic → USB port                                       ║"
-echo "║     Speaker → 3.5mm jack                                 ║"
+echo "║  2. Hardware connections:                                ║"
+echo "║     PIR sensor  → GPIO 17 (Pin 11)                      ║"
+echo "║     Camera      → CSI port or USB                       ║"
+echo "║     USB Mic     → any USB port                          ║"
+echo "║     Speaker     → 3.5mm jack                            ║"
 echo "║                                                          ║"
 echo "║  3. Test run:                                            ║"
 echo "║     python3 brainhack.py                                 ║"
 echo "║                                                          ║"
-echo "║  4. Start on boot:                                       ║"
+echo "║  4. Start service (auto-runs on boot):                   ║"
 echo "║     sudo systemctl start brainhack                       ║"
 echo "║                                                          ║"
 echo "║  5. View logs:                                           ║"
